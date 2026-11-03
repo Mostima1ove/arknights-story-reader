@@ -157,9 +157,13 @@ footer a{{color:var(--acc)}}
 #ctl button:active{{background:#ffffff2e}}
 #ctl.hide{{opacity:.25}}
 #tocBtn{{position:fixed;left:12px;top:calc(12px + env(safe-area-inset-top));z-index:98;
- padding:8px 12px;border-radius:10px;border:1px solid #ffffff1f;background:#00000066;color:#e8e4da;
- font-size:13px;font-family:system-ui,sans-serif;backdrop-filter:blur(8px);cursor:pointer}}
-#tocPanel{{position:fixed;left:0;top:0;bottom:0;width:min(80vw,330px);z-index:99;
+ padding:11px 16px;border-radius:12px;border:1px solid #ffffff26;background:#00000080;color:#efeae0;
+ font-size:14.5px;font-family:system-ui,sans-serif;backdrop-filter:blur(10px);cursor:pointer;
+ transition:opacity .2s ease,transform .2s ease}}
+#tocBtn.dim{{opacity:.22;transform:scale(.94)}}
+#tocMask{{position:fixed;inset:0;background:#00000080;z-index:98;display:none}}
+#tocMask.show{{display:block}}
+#tocPanel{{position:fixed;left:0;top:0;bottom:0;width:min(80vw,330px);z-index:99;box-shadow:8px 0 30px #0008;
  background:#0c0f11f5;backdrop-filter:blur(12px);border-right:1px solid #ffffff14;
  transform:translateX(-102%);transition:transform .22s ease;overflow-y:auto;padding:20px 16px 40px}}
 #tocPanel.open{{transform:none}}
@@ -184,6 +188,7 @@ img.sc{{cursor:zoom-in}}
 <footer>文本与配图来自 <a href="{args.credit}">PRTS</a>；台词一句未删，仅去掉演出指令。
 <br><span style="opacity:.6">v0.6 · {__import__('datetime').date.today().isoformat()} 生成</span></footer>
 </div>
+<div id="tocMask"></div>
 <div id="tocPanel"><div class="toc">{toc_html}</div></div>
 <div id="viewer"><img id="vimg" alt=""></div>
 <div id="ctl">
@@ -220,10 +225,24 @@ img.sc{{cursor:zoom-in}}
 
   // 目录抽屉
   var panel=document.getElementById('tocPanel');
-  document.getElementById('tocBtn').onclick=function(){{panel.classList.toggle('open');}};
+  var btn=document.getElementById('tocBtn');
+  var mask=document.getElementById('tocMask');
+  function openToc(){{ panel.classList.add('open'); mask.classList.add('show'); }}
+  function closeToc(){{ panel.classList.remove('open'); mask.classList.remove('show'); }}
+  btn.onclick=function(){{ panel.classList.contains('open') ? closeToc() : openToc(); }};
+  mask.onclick=closeToc;
   panel.addEventListener('click',function(e){{
-    if(e.target.tagName==='A') panel.classList.remove('open');
+    if(e.target.closest('a')) closeToc();          // 点条目跳转后自动收起
   }});
+  document.addEventListener('keydown',function(e){{ if(e.key==='Escape') closeToc(); }});
+
+  // 向下滚时按钮淡出，往上滚回来
+  var lastY=0;
+  window.addEventListener('scroll',function(){{
+    var y=window.scrollY;
+    if(y>lastY && y>140) btn.classList.add('dim'); else btn.classList.remove('dim');
+    lastY=y;
+  }},{{passive:true}});
 
   // 图片点开看大图
   var view=document.getElementById('viewer'), vimg=document.getElementById('vimg');
