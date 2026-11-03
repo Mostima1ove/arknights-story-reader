@@ -42,6 +42,14 @@ def main():
     avdir = os.path.join(args.base, args.avdir)
 
     who_main = {n: c for n, v, c in rows if c != "-"}
+    cm_path = os.path.join(args.base, "char_main.json")
+    char_main = json.load(open(cm_path, encoding="utf-8")) if os.path.exists(cm_path) else {}
+
+    def pick(who, cid):
+        """某句的立绘如果其实是别人的（沿用上一个人），换回这个说话人自己的。"""
+        if cid and char_main and char_main.get(cid, who) != who:
+            return who_main.get(who) or cid
+        return cid or who_main.get(who)
     sc_idx, sc_used = {}, []
     av_idx, av_used = {}, []
     for e in eps:
@@ -53,15 +61,14 @@ def main():
     for e in eps:
         for k, v in e["events"]:
             if k == "say":
-                cid = v.get("char") or who_main.get(v["who"])
+                cid = pick(v["who"], v.get("char"))
                 if cid and cid not in av_idx and os.path.exists(os.path.join(avdir, cid + ".png")):
                     av_idx[cid] = len(av_used)
                     av_used.append(cid)
 
-    css = [f".s{i}{{background-image:url(data:image/webp;base64,{b64(os.path.join(full,k+'.webp'),640)})}}"
-           for i, k in enumerate(sc_used)]
-    css += [f".a{i}{{background-image:url(data:image/webp;base64,{b64(os.path.join(avdir,c+'.png'),112,76)})}}"
-            for i, c in enumerate(av_used)]
+    sc_src = {k: "data:image/webp;base64," + b64(os.path.join(full, k + ".webp"), 780, 56) for k in sc_used}
+    css = [f".a{i}{{background-image:url(data:image/webp;base64,{b64(os.path.join(avdir,c+'.png'),112,76)})}}"
+           for i, c in enumerate(av_used)]
 
     def ep_meta(t):
         code = t.split(" ")[0]
@@ -96,15 +103,15 @@ def main():
         for k, v in e["events"]:
             if k == "bg":
                 if v in sc_idx:
-                    flush(); fn(); body.append(f'<div class="sc s{sc_idx[v]}"></div>')
+                    flush(); fn(); body.append(f'<img class="sc" src="{sc_src[v]}" alt="">')
             elif k == "cg":
                 if v in sc_idx:
-                    flush(); fn(); body.append(f'<div class="sc s{sc_idx[v]} iscg"></div>')
+                    flush(); fn(); body.append(f'<img class="sc iscg" src="{sc_src[v]}" alt="">')
             elif k == "narr":
                 flush(); narr.append(v)
             else:
                 fn()
-                cid = v.get("char") or who_main.get(v["who"])
+                cid = pick(v["who"], v.get("char"))
                 if buf and buf[0][0] == v["who"] and buf[0][1] == cid:
                     buf[0][2].append(v["text"])
                 else:
@@ -115,42 +122,133 @@ def main():
     says = sum(1 for e in eps for k, _ in e["events"] if k == "say")
 
     CSS = f"""
-:root{{--bg:{T['bg']};--fg:{T['fg']};--dim:{T['dim']};--line:{T['line']};--acc:{T['acc']}}}
+:root{{--bg:{T['bg']};--fg:{T['fg']};--dim:{T['dim']};--line:{T['line']};--acc:{T['acc']};--k:1;--ik:1;--pad:clamp(14px, 4.2vw, 26px)}}
+html{{background:{T['bg']};-webkit-text-size-adjust:100%}}
+img,table,pre{{max-width:100%}}
+*{{min-width:0}}
 *{{box-sizing:border-box}} html{{-webkit-text-size-adjust:100%}}
-body{{margin:0;background:var(--bg);color:var(--fg);max-width:680px;margin:0 auto;
- font-family:"Noto Serif SC","Songti SC",Georgia,"Microsoft YaHei",serif;font-size:16.5px;line-height:1.9;padding:0 16px 80px}}
+body{{margin:0;background:var(--bg);color:var(--fg);overflow-x:hidden;
+ font-family:"Noto Serif SC","Songti SC",Georgia,"Microsoft YaHei",serif}}
+#page{{width:900px;transform-origin:top left;font-size:calc(16.5px * var(--k));line-height:1.9;
+ padding:0 max(var(--pad), env(safe-area-inset-right)) 90px max(var(--pad), env(safe-area-inset-left))}}
 header{{padding:40px 0 14px}}
-.kicker{{font-size:12px;letter-spacing:.22em;color:var(--acc);margin-bottom:10px;font-family:system-ui,sans-serif}}
-h1{{font-size:25px;margin:0 0 6px;color:{T['strong']}}}
-.sub{{color:var(--dim);font-size:13px;line-height:1.7;margin:0}}
+.kicker{{font-size:.74em;letter-spacing:.22em;color:var(--acc);margin-bottom:10px;font-family:system-ui,sans-serif}}
+h1{{font-size:1.55em;margin:0 0 6px;color:{T['strong']}}}
+.sub{{color:var(--dim);font-size:.82em;line-height:1.7;margin:0}}
 .toc{{margin:16px 0 26px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:10px 0}}
-.toc a{{display:flex;justify-content:space-between;color:var(--fg);text-decoration:none;font-size:13.5px;padding:5px 0;border-bottom:1px dotted #212628}}
+.toc a{{display:flex;justify-content:space-between;color:var(--fg);text-decoration:none;font-size:.86em;padding:5px 0;border-bottom:1px dotted #212628}}
 .toc a i{{color:var(--dim);font-style:normal;font-size:12px}}
-h2{{font-size:19px;margin:40px 0 12px;color:{T['strong']};border-top:1px solid var(--line);padding-top:18px}}
-h2 .lb{{font-size:11.5px;color:var(--acc);margin-left:8px;letter-spacing:.1em}}
-.sc{{height:170px;border-radius:10px;background-size:cover;background-position:center;margin:12px 0;background-color:{T['sc']}}}
-.sc.iscg{{height:210px}}
-@media (max-width:520px){{.sc{{height:130px}}.sc.iscg{{height:160px}}}}
+h2{{font-size:1.16em;margin:40px 0 12px;color:{T['strong']};border-top:1px solid var(--line);padding-top:18px}}
+h2 .lb{{font-size:.72em;color:var(--acc);margin-left:8px;letter-spacing:.1em}}
+.sc{{width:calc(100% * var(--ik));height:auto;display:block;border-radius:10px;margin:12px auto;background:{T['sc']}}}
 p.n{{color:{T['narr']};margin:0 0 12px;text-align:justify}}
 .line{{display:flex;gap:9px;margin:0 0 12px;align-items:flex-start}}
 .av{{flex:0 0 56px;width:56px;height:72px;border-radius:6px;background-size:cover;background-position:top center;background-color:{T['av']}}}
 .av.none{{opacity:.22}}
 .sb{{flex:1;min-width:0}}
-.who{{display:block;font-size:11.5px;color:var(--acc);letter-spacing:.05em;margin-bottom:1px;font-family:system-ui,sans-serif}}
-.sb p{{margin:0 0 2px;font-size:16px;line-height:1.85;color:{T['txt']}}}
-footer{{margin-top:50px;padding-top:16px;border-top:1px solid var(--line);color:var(--dim);font-size:12px;line-height:1.8}}
+.who{{display:block;font-size:.72em;color:var(--acc);letter-spacing:.05em;margin-bottom:1px;font-family:system-ui,sans-serif}}
+.sb p{{margin:0 0 2px;font-size:1em;line-height:1.85;color:{T['txt']}}}
+footer{{margin-top:50px;padding-top:16px;border-top:1px solid var(--line);color:var(--dim);font-size:.76em;line-height:1.8}}
 footer a{{color:var(--acc)}}
+#ctl{{position:fixed;right:12px;bottom:calc(14px + env(safe-area-inset-bottom));display:flex;gap:6px;z-index:99;
+ padding:6px;border-radius:12px;background:#00000066;backdrop-filter:blur(8px);border:1px solid #ffffff1a}}
+#ctl button{{width:36px;height:36px;border-radius:9px;border:0;background:#ffffff14;color:#e8e4da;
+ font-size:15px;font-family:system-ui,sans-serif;cursor:pointer}}
+#ctl button:active{{background:#ffffff2e}}
+#ctl.hide{{opacity:.25}}
+#tocBtn{{position:fixed;left:12px;top:calc(12px + env(safe-area-inset-top));z-index:98;
+ padding:8px 12px;border-radius:10px;border:1px solid #ffffff1f;background:#00000066;color:#e8e4da;
+ font-size:13px;font-family:system-ui,sans-serif;backdrop-filter:blur(8px);cursor:pointer}}
+#tocPanel{{position:fixed;left:0;top:0;bottom:0;width:min(80vw,330px);z-index:99;
+ background:#0c0f11f5;backdrop-filter:blur(12px);border-right:1px solid #ffffff14;
+ transform:translateX(-102%);transition:transform .22s ease;overflow-y:auto;padding:20px 16px 40px}}
+#tocPanel.open{{transform:none}}
+#tocPanel .toc a{{font-size:13px}}
+#viewer{{position:fixed;inset:0;background:#000000e8;display:none;align-items:center;justify-content:center;z-index:100}}
+#viewer img{{max-width:96vw;max-height:92vh;border-radius:8px}}
+img.sc{{cursor:zoom-in}}
 """
 
     page = f"""<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="{T['bg']}">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <title>{args.title} · 剧情全文</title><style>{CSS}{''.join(css)}</style></head><body>
+<div id="page">
 <header><div class="kicker">Arknights · SideStory</div>
 <h1>{args.title}</h1>
 <p class="sub">{len(eps)} 节剧情全文 · {says} 句台词 · 场景随剧情切换 · 说话人带脸</p>
-<div class="toc">{toc_html}</div></header>
+<button id="tocBtn">☰ 目录</button></header>
 {''.join(body)}
-<footer>文本与配图来自 <a href="{args.credit}">PRTS</a>；台词一句未删，仅去掉演出指令。</footer>
+<footer>文本与配图来自 <a href="{args.credit}">PRTS</a>；台词一句未删，仅去掉演出指令。
+<br><span style="opacity:.6">v0.6 · {__import__('datetime').date.today().isoformat()} 生成</span></footer>
+</div>
+<div id="tocPanel"><div class="toc">{toc_html}</div></div>
+<div id="viewer"><img id="vimg" alt=""></div>
+<div id="ctl">
+  <button id="fsm" title="字号-">A−</button>
+  <button id="fsp" title="字号+">A+</button>
+  <button id="igm" title="图片-">−图</button>
+  <button id="igp" title="图片+">图+</button>
+</div>
+<script>
+(function(){{
+  // 整页等比缩放（含图片）：手机不缩，桌面拖窄时整页跟着小
+  function fit(){{
+    var w = window.innerWidth;
+    var z = Math.max(0.3, Math.min(1, w / 940));
+    var pg = document.getElementById('page');
+    if (!pg) return;
+    pg.style.transform = 'scale(' + z + ')';
+    document.body.style.height = Math.ceil(pg.offsetHeight * z) + 'px';
+  }}
+  fit(); window.addEventListener('resize', fit); window.addEventListener('load', fit);
+
+  var r=document.documentElement;
+  var k=parseFloat(localStorage.getItem('xs-k'))||1;
+  function apply(){{r.style.setProperty('--k',k);localStorage.setItem('xs-k',k);}}
+  apply();
+  document.getElementById('fsm').onclick=function(){{k=Math.max(0.8,+(k-0.1).toFixed(2));apply();}};
+  document.getElementById('fsp').onclick=function(){{k=Math.min(1.8,+(k+0.1).toFixed(2));apply();}};
+
+  var ik=parseFloat(localStorage.getItem('xs-ik'))||1;
+  function applyImg(){{r.style.setProperty('--ik',ik);localStorage.setItem('xs-ik',ik);}}
+  applyImg();
+  document.getElementById('igm').onclick=function(){{ik=Math.max(0.4,+(ik-0.1).toFixed(2));applyImg();}};
+  document.getElementById('igp').onclick=function(){{ik=Math.min(1.5,+(ik+0.1).toFixed(2));applyImg();}};
+
+  // 目录抽屉
+  var panel=document.getElementById('tocPanel');
+  document.getElementById('tocBtn').onclick=function(){{panel.classList.toggle('open');}};
+  panel.addEventListener('click',function(e){{
+    if(e.target.tagName==='A') panel.classList.remove('open');
+  }});
+
+  // 图片点开看大图
+  var view=document.getElementById('viewer'), vimg=document.getElementById('vimg');
+  document.querySelectorAll('img.sc').forEach(function(im){{
+    im.addEventListener('click',function(){{ vimg.src=im.src; view.style.display='flex'; }});
+  }});
+  view.addEventListener('click',function(){{ view.style.display='none'; }});
+
+  // 记住读到哪儿
+  var posKey='xs-pos-'+location.pathname;
+  window.addEventListener('scroll',function(){{
+    var h=document.body.scrollHeight-window.innerHeight;
+    if(h>10) localStorage.setItem(posKey,(window.scrollY/h).toFixed(4));
+  }},{{passive:true}});
+  window.addEventListener('load',function(){{
+    setTimeout(function(){{
+      var p=localStorage.getItem(posKey);
+      if(p && +p>0.02){{
+        var h=document.body.scrollHeight-window.innerHeight;
+        if(h>10) window.scrollTo(0,Math.round(+p*h));
+      }}
+    }},350);
+  }});
+}})();
+</script>
 </body></html>"""
 
     open(args.out, "w", encoding="utf-8").write(page)

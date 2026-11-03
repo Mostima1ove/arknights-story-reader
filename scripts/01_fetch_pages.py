@@ -33,6 +33,19 @@ def search(q, limit=50, ns=0):
         return []
 
 
+def allpages(prefix):
+    """按标题前缀列页面。比全文搜索可靠：搜索会把 CB- 里的 - 当成排除语法。"""
+    out = "_ap.json"
+    url = api({"action": "query", "list": "allpages", "apprefix": prefix,
+               "aplimit": 200, "format": "json", "formatversion": 2})
+    curl(url, out)
+    try:
+        j = json.load(open(out, encoding="utf-8"))
+        return [x["title"] for x in j.get("query", {}).get("allpages", [])]
+    except Exception:
+        return []
+
+
 def wikitext(page, out):
     url = api({"action": "parse", "page": page, "prop": "wikitext",
                "format": "json", "formatversion": 2, "redirects": 1})
@@ -68,14 +81,27 @@ def main():
     print("关卡代号", code)
 
     # 2) 剧情页
-    titles = search(code + "-", limit=50)
+    titles = allpages(code + "-")
+    if not titles:
+        titles = search(code + "-", limit=50)
     pages = [t for t in titles if "/" in t]
-    pages.sort()
+
+    # 顺序照活动页的关卡列表来（序幕 ST 可能排在最后，不能按编号排）
+    order = {c: i for i, c in enumerate(re.findall(r"\{\{关卡链接\|([^}\]]+)\}\}", act))}
+
+    def sort_key(pg):
+        c = pg.split(" ")[0]
+        part = pg.split("/")[-1].upper()
+        seq = 0 if part in ("BEG", "NBT") else 1
+        return (order.get(c, 999), seq, pg)
+
+    pages.sort(key=sort_key)
     print("剧情页", len(pages))
 
     # 3) 下载
     for i, p in enumerate(pages, 1):
-        out = os.path.join(raw, f"{i:02d}_" + p.replace("/", "_") + ".json")
+        safe = re.sub(r'[\\/:*?"<>|]', "_", p)   # 冒号在 Windows 上非法，会截断文件名
+        out = os.path.join(raw, f"{i:02d}_" + safe + ".json")
         if os.path.exists(out) and os.path.getsize(out) > 3000:
             continue
         if wikitext(p, out):

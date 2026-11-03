@@ -12,9 +12,13 @@ UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.
 WIDGET = "https://prts.wiki/w/Widget:Data_Image"
 
 
-def curl(url, out, timeout="120"):
-    subprocess.run(["curl.exe", "-s", "-L", "-m", timeout, "-A", UA,
-                    "-H", "Referer: https://prts.wiki/", url, "-o", out], capture_output=True)
+def curl(url, out, timeout="120", referer=True):
+    cmd = ["curl.exe", "-s", "-L", "-m", timeout, "-A", UA,
+           "-H", "Accept-Language: zh-CN,zh;q=0.9"]
+    if referer:
+        cmd += ["-H", "Referer: https://prts.wiki/"]
+    cmd += [url, "-o", out]
+    subprocess.run(cmd, capture_output=True)
     return os.path.exists(out) and os.path.getsize(out) > 5000
 
 
@@ -29,7 +33,7 @@ def build_map(base):
         return json.load(open(p, encoding="utf-8"))
     os.makedirs(os.path.dirname(p), exist_ok=True)
     tmp = os.path.join(base, "assets", "widget.html")
-    if not curl(WIDGET, tmp):
+    if not curl(WIDGET, tmp, referer=False):   # 带 Referer 会被 PRTS 挡 403
         print("Widget:Data_Image 抓取失败")
         sys.exit(1)
     t = open(tmp, encoding="utf-8").read()

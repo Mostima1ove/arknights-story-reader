@@ -1,22 +1,16 @@
 ﻿# 一行装（PowerShell）
-# 用法：irm https://raw.githubusercontent.com/<你的用户名>/arknights-story-reader/main/install.ps1 | iex
+# 用法：irm https://raw.githubusercontent.com/Mostima1ove/arknights-story-reader/main/install.ps1 | iex
 $ErrorActionPreference = 'Stop'
-
 $repo = 'https://github.com/Mostima1ove/arknights-story-reader'
 $name = 'arknights-story-reader'
 $dshHome = if ($env:DSH_HOME) { $env:DSH_HOME } else { Join-Path $HOME '.dsh' }
 $skills = Join-Path $dshHome 'skills'
 $dest = Join-Path $skills $name
-
 New-Item -ItemType Directory -Force -Path $skills | Out-Null
-
 $hasGit = $null -ne (Get-Command git -ErrorAction SilentlyContinue)
-
 if ($hasGit) {
-    if (Test-Path (Join-Path $dest '.git')) {
-        Write-Host "更新已有安装 ..."
-        git -C $dest pull --ff-only
-    } else {
+    if (Test-Path (Join-Path $dest '.git')) { git -C $dest pull --ff-only }
+    else {
         if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
         Write-Host "克隆到 $dest ..."
         git clone --depth 1 $repo $dest
@@ -34,7 +28,6 @@ if ($hasGit) {
     Copy-Item $src.FullName $dest -Recurse
     Remove-Item $tmp -Recurse -Force
 }
-
 $py = $null
 foreach ($c in @('python', 'python3', 'py')) {
     if (Get-Command $c -ErrorAction SilentlyContinue) { $py = $c; break }
@@ -44,13 +37,12 @@ if (-not $py) {
     if (Test-Path $dshPy) { $py = $dshPy }
 }
 if ($py) {
-    Write-Host "安装依赖 pillow / numpy ..."
-    & $py -m pip install --quiet pillow numpy
-    & $py -c "import PIL, numpy; print('依赖 OK')"
+    Write-Host "安装依赖 pillow / numpy / opencv ..."
+    & $py -m pip install --quiet pillow numpy opencv-python-headless
+    & $py -c "import PIL, numpy, cv2; print('依赖 OK')"
 } else {
-    Write-Host "没找到 Python，请手动装：pip install pillow numpy"
+    Write-Host "没找到 Python，请手动装：pip install pillow numpy opencv-python-headless"
 }
-
 Write-Host ""
 Write-Host "装好了：$dest"
-Write-Host "重启 DSH 后生效；之后说「把《活动名》的剧情做成读本」就会用它。"
+Write-Host "重启 DSH 后生效。"
