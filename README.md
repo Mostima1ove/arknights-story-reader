@@ -1,6 +1,6 @@
 # arknights-story-reader
 
-一个 DSH skill：把明日方舟某个活动的剧情，从 PRTS 抓成一份**带图读本**——背景图随场景切换、每句台词左边站着说话的人、手机上能一页读到底。
+一个 DSH skill：把明日方舟某个活动的剧情，从 PRTS 抓成一份**带图读本**——背景图随场景切换、每句台词左边站着说话的人、手机上能一页读到底，整本可全文搜索。
 
 跑通过：乌萨斯《时间啊，向前！》、《昨日海》、《喧闹法则》、《月行水上》。
 
@@ -59,7 +59,7 @@ python scripts/run.py --name 月行水上 --base D:\work\prts-sr --theme sea --a
 | 5 | `05_build.py` | 图片只存一份挂 CSS 类，排成单文件 HTML |
 | 6 | `06_audit.py` | 「名字 + 头像」核对页 |
 
-读本里带：目录抽屉（滚动时按钮淡出）、图片点开放大、字号与图片缩放按钮、整页等比缩放、阅读位置记忆。
+读本里带：全文搜索（输台词或人名，点结果直接跳过去）、场景图与头像各一个开关（关了就剩纯文字，关一次会记住）、目录抽屉、图片点开放大、字号与图片缩放按钮、整页等比缩放、阅读位置记忆。
 
 细节和踩过的坑都写在 [SKILL.md](SKILL.md)。
 
@@ -68,6 +68,7 @@ python scripts/run.py --name 月行水上 --base D:\work\prts-sr --theme sea --a
 - Python 3.10+，依赖 `pillow`、`numpy`、`opencv-python-headless`
 - 能访问 `prts.wiki` 与 `media.prts.wiki`
 - 一次活动下 50–150 张图，顺序跑 3–5 分钟，不是秒出
+- 第一次裁头像时会自动下一份人脸检测模型（约 240KB，来自 [nagadomi/lbpcascade_animeface](https://github.com/nagadomi/lbpcascade_animeface)），存到 `~/.cache/arknights-story-reader/`。原作者没写许可证，这个文件就不随仓库分发；下载不通的话，按报错里给的路径手动放一份也能用
 
 ## 许可
 

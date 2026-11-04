@@ -34,7 +34,11 @@ def main():
 
     episodes = []
     for fp in files:
-        j = json.load(open(fp, encoding="utf-8"))
+        try:
+            j = json.load(open(fp, encoding="utf-8"))
+        except Exception as e:
+            print("跳过坏文件", os.path.basename(fp), e)
+            continue
         body = parse_body(j["parse"]["wikitext"])
         events, slots, focus = [], {}, None
         for line in body.split("\n"):
@@ -124,7 +128,13 @@ def main():
             rows.append((who, v, ch))
             continue
         cands = [(n, c) for c, n in pair[who].items() if c != "-" and char_main.get(c) == who]
-        rows.append((who, v, max(cands)[1] if cands else (ch or "-")))
+        if cands:
+            rows.append((who, v, max(cands)[1]))
+            continue
+        # 兜底：没有「确证属于自己」的立绘时，用第一次开口时画面上的那个。
+        # 宁可给个候选也别判成无立绘——05 建读本时还会用 char_main 再校一次，
+        # 真正的错配在那儿会被换回来；这里判死就永远找不回来了（阿米娅就是这么丢的）。
+        rows.append((who, v, ch or "-"))
 
     json.dump(rows, open(os.path.join(args.base, "who_char.json"), "w", encoding="utf-8"), ensure_ascii=False)
     json.dump(char_main, open(os.path.join(args.base, "char_main.json"), "w", encoding="utf-8"), ensure_ascii=False)

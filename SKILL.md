@@ -1,7 +1,7 @@
 ---
 name: arknights-story-reader
-version: 0.6.0
-description: 把明日方舟某个活动的剧情做成一份可读的「带图读本」——从 PRTS 抓剧情原文、游戏内背景与 CG、每个说话人的立绘头像，排版成手机上能一页读到底的 HTML。用于「帮我把某活动的剧情做出来／整理剧情／做成能读的版本」这类请求。
+version: 0.7.3
+description: 把明日方舟某个活动的剧情做成一份可读的「带图读本」——从 PRTS 抓剧情原文、游戏内背景与 CG、每个说话人的立绘头像，排版成手机上能一页读到底、可全文搜索的 HTML；做了多份之后还能收成一页书架。用于「帮我把某活动的剧情做出来／整理剧情／做成能读的版本」这类请求。
 ---
 
 # 明日方舟剧情读本
@@ -13,6 +13,7 @@ description: 把明日方舟某个活动的剧情做成一份可读的「带图�
 ## 前置
 
 - Python 3.10+，依赖：`pip install pillow numpy opencv-python-headless`（opencv 用来找人脸，裁头像那步要用）。DSH 自带的 Python 也能用（`%USERPROFILE%\.dsh\dsh-runtimes\...`）。
+- **人脸模型不随包分发**：`lbpcascade_animeface.xml`（nagadomi/lbpcascade_animeface，作者没声明许可证）在第一次跑 `04_make_avatars.py` 时自动下到 `~/.cache/arknights-story-reader/`。找的顺序是「脚本同级 → 用户缓存 → 下载」，所以想手动放的话，放脚本旁边照样认。下载不通会打印出该存到哪。
 - PRTS 的 API 不需要登录，但**必须带 UA**，重定向要 `-L`。
 - 工作目录自选，建议 `<你的工作区>\prts-<活动代号>\`，脚本会自己建 `raw/`、`assets/`、`cast/`。
 
@@ -91,8 +92,38 @@ GET https://prts.wiki/w/Widget:Data_Image
 - 场景：`<div class="sc">` 高 130–190，跟背景一起切换；CG 高一点。
 - 深色底（`#17181b` / 暖字）比白底更耐看，手机晚上读不刺眼。
 - **整页缩放用 `transform: scale()`，不要用 `zoom`**：`zoom` 只缩文字、图片不跟；transform 把整页包一层 `#page`（宽 900）再整体缩，字图一起变。窗口 `< 940px` 时按 `w/940` 缩，下限 0.3；body 高度要跟着 `page.offsetHeight * z` 补，不然底部会被切。
+- **`transform-origin` 必须是 `top left`，居中靠手动 `marginLeft = (w - 900*z)/2`**。用 `top center` 的话，900px 宽的块在窄屏上本来就溢出、`margin:auto` 失效贴左，再按中心缩放就会整体偏右、右边被切掉一截——桌面看不出来，手机上明显。
+- **`env(safe-area-inset-*)` 一定要有兜底**：先写 `bottom:16px`，再用 `@supports (padding:env(...))` 覆盖成 `calc(16px + env(...))`。个别内核把整条声明判无效，浮动按钮会掉到页面最底下（看上去像"按钮没了"）。
+- **全文搜索不要预生成索引文件，也不要每次输入遍历 DOM**：首次打开搜索层时把每句台词抽成一份内存数组（`{el, text, 幕名}`），之后只在数组里 `indexOf`。2800 句建一次约 100ms，输入加 150ms 防抖就够顺。
+- **场景图 / 头像开关走 `body` 上的类**（`.no-sc` / `.no-av`），CSS 一角 `display:none` 解决，状态存 localStorage。别用 JS 逐个改 DOM 的 style，几千个节点会卡。
 - 字号给个 `A− / A+` 按钮调倍率（`--k`，0.8–1.8），存 localStorage；边距用 `clamp(14px, 4.2vw, 26px)` 自适应，不设按钮。
 - 场景图用 `<img>` 直接完整显示（`width:100%;height:auto;border-radius:10px`），不要固定高度 + `cover`，那是裁图。代价是文件会大（时间啊 7MB / 月行水上 3.4MB），可接受。
+
+### 6. 书架（可选，别自作主张）
+
+读本头部埋了这几个 meta，专门给书架认人用：
+
+```html
+<meta name="generator" content="arknights-story-reader/0.7.3">
+<meta name="asr:book" content="众生行记">
+<meta name="asr:scenes" content="24">
+<meta name="asr:lines" content="4794">
+```
+
+`05_build.py` 跑完会自动看一遍输出目录：
+
+- **已经有书架** → 顺手把这一本收进去，打印「书架已更新（现有 N 本 / …）」
+- **没有书架** → 只打印一句提示，不会自己建
+
+所以要不要建书架得**问用户**，别往人家目录里自作主张放文件。用户说要，再跑：
+
+```
+python scripts/shelf.py --root <读本所在目录>
+```
+
+书架默认叫 `剧情书架.html`；目录里已经有书架时就地更新那一个，不会多生出第二个。它只收带 `generator` 标记的 HTML，用户自己扔进来的别的网页不会被误收。
+
+链接是相对路径，读本一挪位置就断——书架得和读本待在同一个目录（或固定的相对位置），别一个放 D 盘一个放桌面。
 
 ## 核对
 
@@ -107,7 +138,18 @@ GET https://prts.wiki/w/Widget:Data_Image
 - 最终 HTML 控制在 3.5MB 以内（乌萨斯 3.0MB、昨日海 1.1MB 是正常值）。
 - 中文路径下 OpenCV 读不了图（`imread` 返回 None），要 `np.fromfile` + `cv2.imdecode`；CascadeClassifier 也要放纯英文路径。
 
+### 验证 HTML 界面别踩的两个坑
+
+1. **`--headless` 截图里 `position:fixed` 是按整页高度定位的**，不是按窗口高度。右下角的浮动按钮在截图里永远看不见——别据此判断"按钮坏了"，我在这上面白折腾过一轮。要看得把该元素临时改成 `top:10px;left:10px` 再截。
+2. **QQ 浏览器开着的时候，新起的 headless 进程会被已有实例接管**（单实例锁，实测挂着 30 个进程）。连着截几张，返回的可能是同一张旧图（字节数完全一样就是信号）。要自动验证就换 `--user-data-dir` 独立实例，或者干脆重开一台干净的浏览器。
+
 ## 变更记录
+
+- **v0.7.3** 读本头部加 `generator` 和 `asr:book/asr:scenes/asr:lines` 四个 meta；`shelf.py` 重写，只收带标记的读本、目录里有书架就地更新、卡片带幕数台词数；`05_build.py` 生成完自动更新同目录的书架
+
+- **v0.7.2** 全文搜索（首次打开建内存索引，点结果跳转并闪烁定位）；场景图 / 头像开关（`body` 类 + localStorage，关一次就记住）；修窄屏整页缩放不居中、右侧被切的老问题（`transform-origin` 改 `top left` + 手动居中）；`env()` 全部换成带 `@supports` 兜底的写法；人脸模型 `lbpcascade_animeface.xml` 不再随包分发（原作者没声明许可证），改成首次跑 `04` 时自动下到 `~/.cache/arknights-story-reader/`
+
+- **v0.7** 右下角合并成一个 ☰：抽屉里放 A−/A+ 与图−/图+，调完点外面收起；修掉目录按钮与字号按钮重叠（残留的 fixed 样式）
 
 - **v0.6** 一键 `run.py`；目录抽屉、图片点开放大、阅读位置记忆；（`shelf.py` 留作内部用，暂不对外）
 

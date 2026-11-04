@@ -10,8 +10,41 @@ import numpy as np
 import cv2
 from PIL import Image
 
-CASCADE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lbpcascade_animeface.xml")
+HERE = os.path.dirname(os.path.abspath(__file__))
+CASCADE_NAME = "lbpcascade_animeface.xml"
+CASCADE_URL = ("https://raw.githubusercontent.com/nagadomi/lbpcascade_animeface"
+               "/master/lbpcascade_animeface.xml")
+CACHE_DIR = os.path.join(os.path.expanduser("~"), ".cache", "arknights-story-reader")
 _cascade = None
+
+
+def cascade_path():
+    """人脸模型不随仓库分发（原作者没有给许可证），第一次用时自己下。
+
+    找的顺序：脚本同级 → 用户缓存 → 下载到用户缓存。
+    """
+    local = os.path.join(HERE, CASCADE_NAME)
+    if os.path.exists(local) and os.path.getsize(local) > 100000:
+        return local
+    cached = os.path.join(CACHE_DIR, CASCADE_NAME)
+    if os.path.exists(cached) and os.path.getsize(cached) > 100000:
+        return cached
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    for cmd in ("curl.exe", "curl"):
+        try:
+            subprocess.run([cmd, "-s", "-L", "-m", "180", "-A", UA,
+                            CASCADE_URL, "-o", cached], capture_output=True)
+        except FileNotFoundError:
+            continue
+        if os.path.exists(cached) and os.path.getsize(cached) > 100000:
+            print("人脸模型已下载到", cached)
+            return cached
+    raise RuntimeError(
+        "人脸模型缺失，自动下载失败。请手动下载后放进去：\n"
+        f"  {CASCADE_URL}\n"
+        f"  存成 {cached}\n"
+        "（国内网络可能要用代理）")
+
 
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36"
 BG = (238, 234, 226)
@@ -44,9 +77,15 @@ def face_box(path, w, h):
     """先用二次元人脸模型找脸：有光环、戴帽子的角色靠它定位。找不到返回 None。"""
     global _cascade
     if _cascade is None:
-        _cascade = cv2.CascadeClassifier(CASCADE_PATH)
-        if _cascade.empty():
+        try:
+            _cascade = cv2.CascadeClassifier(cascade_path())
+        except Exception as e:
+            print("人脸模型不可用，退回轮廓扫描：", e)
             _cascade = False
+        else:
+            if _cascade.empty():
+                print("人脸模型读不进来，退回轮廓扫描")
+                _cascade = False
     if _cascade is False:
         return None
     try:
