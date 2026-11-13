@@ -5,7 +5,7 @@
   python 05_build.py --base <dir> --title 昨日海 --theme sea --out 昨日海-剧情全文.html
 主题：dark（乌萨斯那种暖红）/ sea（伊比利亚那种青蓝）
 """
-import argparse, base64, io, json, os, sys
+import argparse, base64, io, json, os, re, sys
 from PIL import Image
 
 THEMES = {
@@ -16,7 +16,7 @@ THEMES = {
 }
 
 # 书架靠这个版本号 + generator 标记认出「是本 skill 做的读本」，改版本时记得一起动
-VERSION = "0.7.3"
+VERSION = "0.7.5"
 
 
 def b64(p, w, q=58):
@@ -84,6 +84,11 @@ def main():
            for i, c in enumerate(av_used)]
 
     def ep_meta(t):
+        # 干员密录的页面标题形如「莫斯提马/干员密录/2」，没有关卡代号，
+        # 硬套下面的拆法会让代号和名字都变成整串、标题重复一遍。
+        m = re.match(r"^(.+?)/干员密录/(\d+)$", t)
+        if m:
+            return m.group(1), "干员密录·" + m.group(2), ""
         code = t.split(" ")[0]
         name = t.split(" ", 1)[1].split("/")[0] if " " in t else t
         part = t.split("/")[-1]
@@ -134,6 +139,25 @@ def main():
     toc_html = "".join(f'<a href="#{a}"><b>{t}</b><i>{l}</i></a>' for a, t, l in toc)
     says = sum(1 for e in eps for k, _ in e["events"] if k == "say")
 
+    # 同一个目录里已经有书架的话，右下角多给一个「回书架」的圆钮。
+    # 书名不确定，所以扫一遍目录找带书架标记的那个文件。
+    outdir = os.path.dirname(os.path.abspath(args.out))
+    shelf_btn = ""
+    try:
+        for fn in sorted(os.listdir(outdir)):
+            if not fn.lower().endswith(".html"):
+                continue
+            fp = os.path.join(outdir, fn)
+            if not os.path.isfile(fp):
+                continue
+            with open(fp, "rb") as f:
+                head = f.read(4096).decode("utf-8", "ignore")
+            if "arknights-story-reader-shelf/" in head:
+                shelf_btn = f'<a id="shelfBtn" href="{fn}" title="回书架">📚</a>'
+                break
+    except Exception:
+        pass
+
     CSS = f"""
 :root{{--bg:{T['bg']};--fg:{T['fg']};--dim:{T['dim']};--line:{T['line']};--acc:{T['acc']};--k:1;--ik:1;--pad:clamp(14px, 4.2vw, 26px)}}
 html{{background:{T['bg']};-webkit-text-size-adjust:100%}}
@@ -169,9 +193,10 @@ footer{{margin-top:50px;padding-top:16px;border-top:1px solid var(--line);color:
 footer a{{color:var(--acc)}}
 #ctl{{position:fixed;right:14px;bottom:16px;z-index:98;display:flex;gap:8px}}
 @supports (padding:env(safe-area-inset-bottom)){{#ctl{{bottom:calc(16px + env(safe-area-inset-bottom))}}}}
-#ctl button{{width:52px;height:52px;border-radius:50%;border:1px solid #ffffff3d;background:#0b0d0fe0;
+#ctl button,#ctl a{{width:52px;height:52px;border-radius:50%;border:1px solid #ffffff3d;background:#0b0d0fe0;
  color:#efeae0;font-size:19px;line-height:1;font-family:system-ui,sans-serif;cursor:pointer;
- backdrop-filter:blur(10px);box-shadow:0 4px 18px #0009}}
+ backdrop-filter:blur(10px);box-shadow:0 4px 18px #0009;display:flex;align-items:center;
+ justify-content:center;text-decoration:none}}
 #ctl button:active{{background:#ffffff2e}}
 #tocPanel .tools{{display:flex;gap:8px;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid #ffffff14}}
 #tocPanel .tools button{{flex:1;height:42px;border-radius:10px;border:0;background:#ffffff12;color:#eae5db;
@@ -253,6 +278,7 @@ img.sc{{cursor:zoom-in}}
 </div>
 <div id="viewer"><img id="vimg" alt=""></div>
 <div id="ctl">
+  {shelf_btn}
   <button id="searchBtn" title="搜索">🔍</button>
   <button id="tocBtn" title="目录与设置">☰</button>
 </div>

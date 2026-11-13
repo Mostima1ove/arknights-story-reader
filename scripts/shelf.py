@@ -14,6 +14,37 @@ GENERATOR = "arknights-story-reader/"
 SHELF_TAG = "arknights-story-reader-shelf/"
 DEFAULT_NAME = "剧情书架.html"
 
+# 老读本的 CSS 里没有 #ctl a 这条，注入按钮时要连样式一起补
+BTN_CSS = ('<style>#ctl a{width:52px;height:52px;border-radius:50%;'
+           'border:1px solid #ffffff3d;background:#0b0d0fe0;color:#efeae0;'
+           'font-size:19px;display:flex;align-items:center;justify-content:center;'
+           'text-decoration:none;box-shadow:0 4px 18px #0009}</style>')
+
+
+def inject_back(path, shelf_file):
+    """给读本塞一个「回书架」的圆钮；已经有了就只改 href。返回是否动过。"""
+    try:
+        with open(path, encoding="utf-8") as f:
+            s = f.read()
+    except Exception:
+        return False
+    btn = f'<a id="shelfBtn" href="{shelf_file}" title="回书架">📚</a>'
+    changed = False
+    if 'id="shelfBtn"' in s:
+        new = re.sub(r'<a id="shelfBtn" href="[^"]*"',
+                     f'<a id="shelfBtn" href="{shelf_file}"', s, count=1)
+        if new != s:
+            s, changed = new, True
+    elif '<div id="ctl">' in s:
+        s = s.replace('<div id="ctl">', '<div id="ctl">\n  ' + btn, 1)
+        changed = True
+    if changed:
+        if "#ctl a{" not in s:
+            s = s.replace("</head>", BTN_CSS + "</head>", 1)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(s)
+    return changed
+
 CARD = """<a class="bk" href="{href}">
   <div class="tt">{title}</div>
   <div class="mm">{scenes} 幕 · {lines} 句</div>
@@ -104,6 +135,12 @@ def find_shelf(root, explicit=None):
 def build(root, out):
     books = [book_info(p) for p in find_books(root)]
     books.sort(key=lambda b: b["mtime"], reverse=True)
+
+    # 顺手把「回书架」的钮塞进每本读本——先做读本、后建书架的那批就是靠这一步补上的
+    shelf_file = os.path.basename(out)
+    for b in books:
+        inject_back(b["path"], shelf_file)
+
     base = os.path.dirname(os.path.abspath(out))
     total_scenes = sum(b["scenes"] for b in books)
     total_lines = sum(b["lines"] for b in books)

@@ -87,7 +87,10 @@ def main():
     pages = [t for t in titles if "/" in t]
 
     # 顺序照活动页的关卡列表来（序幕 ST 可能排在最后，不能按编号排）
-    order = {c: i for i, c in enumerate(re.findall(r"\{\{关卡链接\|([^}\]]+)\}\}", act))}
+    # 注意：有些关卡写成 {{关卡链接|TA-10|style=color:#fff;}}，带样式参数，
+    # 只取第一个竖线前的部分，否则 key 对不上、这一关会被排到最后。
+    order = {c.split("|")[0].strip(): i
+             for i, c in enumerate(re.findall(r"\{\{关卡链接\|([^}\]]+)\}\}", act))}
 
     def sort_key(pg):
         c = pg.split(" ")[0]
